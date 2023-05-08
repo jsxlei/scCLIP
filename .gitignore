@@ -1,0 +1,9 @@
+data/*
+!data/.gitkeep
+scclip.egg-info/*
+*__pycache__
+*.ipynb_checkpoints
+log/*
+scripts/*
+results/*
+
