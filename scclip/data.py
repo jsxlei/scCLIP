@@ -551,27 +551,17 @@ class BaseDataModule(pl.LightningDataModule):
         )
         return loader
     
-    def dataloader(self, dataset=None):
+    def dataloader(self, dataset=None, shuffle=False):
         loader = DataLoader(
             dataset or self.dataset,
             batch_size=self.batch_size,
-            shuffle=True,
+            shuffle=shuffle,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             # collate_fn=self.train_dataset.collate,
         )
         return loader
     
-    def dataloader_no_shuffle(self, dataset=None):
-        loader = DataLoader(
-            dataset or self.dataset,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
-            # collate_fn=self.train_dataset.collate,
-        )
-        return loader
     
     
 

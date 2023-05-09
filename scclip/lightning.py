@@ -41,11 +41,11 @@ class LitModule(pl.LightningModule):
         return self._step(batch, batch_idx, 'predict')
     
     def configure_optimizers(self):
-        optimizer = optim.AdamW(self.parameters(), lr=self.args.lr, weight_decay=self.args.weight_decay)
+        optimizer = optim.AdamW(self.parameters(), lr=self.config.lr, weight_decay=self.config.weight_decay)
         # return optimizer
         scheduler = get_cosine_schedule_with_warmup(
             optimizer,
-            num_warmup_steps= self.args.warmup_steps, 
+            num_warmup_steps= self.config.warmup_steps, 
             num_training_steps=self.trainer.estimated_stepping_batches,
         )
 

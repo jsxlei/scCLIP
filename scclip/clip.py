@@ -16,6 +16,8 @@ from .lightning import LitModule
 from .vit import ViTConfig, ViTModel
 
 import time
+from tqdm import tqdm
+from anndata import AnnData
 
 
 
@@ -132,7 +134,7 @@ class CLIPOutput(ModelOutput):
 
 
 
-class CLIPModel(PreTrainedModel, LitModule):
+class CLIPModel(LitModule):
 
     def __init__(
         self,
@@ -140,22 +142,18 @@ class CLIPModel(PreTrainedModel, LitModule):
         atac_config,
         rna_config,
     ):
-        super().__init__(config)
-        self.args = config
+        super().__init__()
+        self.config = config
         self.save_hyperparameters()
 
         self.atac_model = ViTModel(atac_config)
         self.rna_model = ViTModel(rna_config)
 
-        self.atac_embed_dim = self.atac_model.config.hidden_size
-        self.rna_embed_dim = self.rna_model.config.hidden_size
-
-
-        self.atac_projection = nn.Linear(self.atac_embed_dim, config.projection_dim, bias=False)
-        self.rna_projection = nn.Linear(self.rna_embed_dim, config.projection_dim, bias=False)
+        # config.hidden_size = self.atac_model.config.hidden_size
+        self.atac_projection = nn.Linear(self.atac_model.config.hidden_size, config.projection_dim, bias=False)
+        self.rna_projection = nn.Linear(self.rna_model.config.hidden_size, config.projection_dim, bias=False)
 
         self.criterion = CLIPLoss(self.config.logit_scale, requires_grad=self.config.requires_grad)
-
 
         print(f'atac_num_patches: {self.atac_model.embeddings.num_patches}', flush=True)
         print(f'rna_num_patches: {self.rna_model.embeddings.num_patches}', flush=True)
@@ -165,61 +163,15 @@ class CLIPModel(PreTrainedModel, LitModule):
         self,
         atac_values=None,
         rna_values=None,
-        return_loss=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
     ):
-        
-        return_dict = return_dict if return_dict is not None else self.config.return_dict
-
-        atac_outputs = self.atac_model(
-            atac_values,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
-        atac_embeds = atac_outputs[1]  # pooler_output
-        if self.atac_projection:
-            atac_embeds = self.atac_projection(atac_embeds)
-
-
-        # rna_embeds = self.rna_model(rna_values)
-        rna_outputs = self.rna_model(
-            rna_values,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
-        rna_embeds = rna_outputs[1]
-        if self.rna_projection:
-            rna_embeds = self.rna_projection(rna_embeds)
-
-                
-        # loss = logits_per_atac = logits_per_rna = None
-        atac_embeds = atac_embeds / atac_embeds.norm(dim=-1, keepdim=True)
-        rna_embeds = rna_embeds / rna_embeds.norm(dim=-1, keepdim=True)
+        atac_embeds = self._get_atac_features(atac_values)
+        rna_embeds = self._get_rna_features(rna_values)
         
         return atac_embeds, rna_embeds
-        # loss, logits_per_atac, logits_per_rna = self.criterion(
-        #     atac_embeds, rna_embeds
-        # )
 
-        # return CLIPOutput(
-        #     loss=loss,
-        #     logits_per_atac=logits_per_atac,
-        #     logits_per_rna=logits_per_rna,
-        #     rna_embeds=rna_embeds,
-        #     atac_embeds=atac_embeds,
-        #     rna_outputs=rna_outputs,
-        #     atac_outputs=atac_outputs,
-        # )
 
 
     def _step(self, batch, batch_idx, mode):
-        # output = self(batch['atac'], batch['rna'])
-        # loss = output.loss
-        # log_dict = {f'clip_loss/{mode}': loss}
         atac_embeds, rna_embeds = self(batch['atac'], batch['rna'])
         loss, similarity = self.criterion(atac_embeds, rna_embeds)
         
@@ -265,54 +217,41 @@ class CLIPModel(PreTrainedModel, LitModule):
         return super().from_pretrained(*args, **kwargs)
 
 
-    def get_rna_features(
-        self,
-        rna_values=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
-    ):
-        rna_outputs = self.rna_model(
-            rna_values,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
+    def _get_rna_features(self, rna_values=None):
+        rna_outputs = self.rna_model(rna_values)
 
         rna_features = rna_outputs[1]
-        # return pooled_output
+        rna_features = self.rna_projection(rna_features)
 
-        if self.rna_projection:
-            rna_features = self.rna_projection(rna_features)
-        
-        # # normalized features
-        # rna_features = rna_features / rna_features.norm(dim=-1, keepdim=True)
+        # if self.normalize:
+        rna_features = rna_features / rna_features.norm(dim=-1, keepdim=True)
 
         return rna_features
 
 
-    def get_atac_features(
-        self,
-        atac_values=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
-    ):
+    def _get_atac_features(self, atac_values=None):
 
-        atac_outputs = self.atac_model(
-            atac_values,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
+        atac_outputs = self.atac_model(atac_values)
 
         atac_features = atac_outputs[1]  # pooled_output
-        # return pooled_output
+        atac_features = self.atac_projection(atac_features)
 
-        if self.atac_projection:
-            atac_features = self.atac_projection(atac_features)
-
-        # normalized features
-        # atac_features = atac_features / atac_features.norm(dim=-1, keepdim=True)
+        # if self.normalize:
+        atac_features = atac_features / atac_features.norm(dim=-1, keepdim=True)
 
         return atac_features
+    
+    def get_batch_rna_features(self, dataloader, obs):
+        self.to('cuda')
+        adata = torch.concat([self._get_rna_features(batch['rna'].to('cuda')).detach().cpu() 
+                              for batch in tqdm(dataloader, desc='rna')]).numpy()
+        adata = AnnData(adata, obs=obs)
+        return adata
+    
+    def get_batch_atac_features(self, dataloader, obs):
+        self.to('cuda')
+        adata = torch.concat([self._get_atac_features(batch['atac'].to('cuda')).detach().cpu()
+                              for batch in tqdm(dataloader, desc='atac')]).numpy()
+        adata = AnnData(adata, obs=obs)
+        return adata
+        

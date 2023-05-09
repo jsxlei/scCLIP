@@ -125,25 +125,25 @@ class Monitor(Callback):
             experiment.add_figure('umap_paired', fig, current_step)
 
         # norm
-        paired.X = paired.X / np.linalg.norm(paired.X, axis=-1, keepdims=True)
+        # paired.X = paired.X / np.linalg.norm(paired.X, axis=-1, keepdims=True)
 
-        fig = plot_umap(paired, color=paired.obs.columns, metric=metric, show=False, **kwargs)
-        if score:
-            print(compute_metrics(paired=paired, use_rep='X_umap'), flush=True)
-        if show:
-            plt.title('umap_norm')
-            plt.show()
-            plt.close()
-        else:
-            experiment.add_figure('umap_norm', fig, current_step)
+        # fig = plot_umap(paired, color=paired.obs.columns, metric=metric, show=False, **kwargs)
+        # if score:
+        #     print(compute_metrics(paired=paired, use_rep='X_umap'), flush=True)
+        # if show:
+        #     plt.title('umap_norm')
+        #     plt.show()
+        #     plt.close()
+        # else:
+        #     experiment.add_figure('umap_norm', fig, current_step)
         
-        fig = plot_paired_scatter(paired.obsm['X_umap'])
-        if show:
-            plt.title('umap_paired_norm')
-            plt.show()
-            plt.close()
-        else:
-            experiment.add_figure('umap_paired_norm', fig, current_step)
+        # fig = plot_paired_scatter(paired.obsm['X_umap'])
+        # if show:
+        #     plt.title('umap_paired_norm')
+        #     plt.show()
+        #     plt.close()
+        # else:
+        #     experiment.add_figure('umap_paired_norm', fig, current_step)
 
 
     @torch.no_grad()

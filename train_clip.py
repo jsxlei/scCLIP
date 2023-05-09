@@ -17,6 +17,8 @@ from scclip.clip import CLIPModel
 from scclip.vit import ViTConfig
 from scclip.callback import Monitor
 from scclip.config import PretrainedConfig, get_model_config
+from scclip.logger import create_logger
+from scclip.plot import plot_umap
 
 import os
 import argparse
@@ -33,7 +35,7 @@ if __name__ == '__main__':
     # DataModule
     parser.add_argument("--batch_size", type=int, default=512)
     parser.add_argument("--num_workers", type=int, default=4)
-    parser.add_argument("--data_dir", type=str)
+    parser.add_argument("--data_dir", type=str, default='human_brain_3k')
     parser.add_argument("--backed", action='store_true', default=False)
     parser.add_argument("--split", default=0.9)
     parser.add_argument("--n_top_genes", type=int, default=None)
@@ -57,7 +59,7 @@ if __name__ == '__main__':
     parser.add_argument("--use_imputed", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--projection_dim', type=int, default=128)
     parser.add_argument('--requires_grad', action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument('--norm_features', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument('--normalize', action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--version", type=str, default='v2')
     
     parser.add_argument("--max_steps", type=int, default=30000)
@@ -70,7 +72,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_data', type=str, default='ADRD')
     parser.add_argument('--cell_type', type=str, default='cell_type')
     parser.add_argument('--use_seq', action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument('--temp', type=float, default=2.6592)
+    parser.add_argument('--logit_scale', type=float, default=2.6592)
     parser.add_argument('--num_patches', type=int, default=128)
 
     # parser = Trainer.add_argparse_args(parser)
@@ -83,6 +85,18 @@ if __name__ == '__main__':
     if args.checkpoint is not None:
         model = CLIPModel.load_from_checkpoint(args.checkpoint) 
         args.default_root_dir = args.checkpoint.split('lightning_logs/')[0]
+        
+        dm = MixDataModule(
+            data_dir = args.data_dir, 
+            modality = args.mod,
+            batch_size=args.batch_size,
+            # n_top_peaks = model.config.peaks,
+            # n_top_genes = model.config.genes.index,
+            linked = args.dist,
+            split = args.split,
+            binary = model.config.binary,
+            use_seq = model.config.use_seq,
+        )
     else:   
         dm = MixDataModule(
             data_dir = args.data_dir,
@@ -116,17 +130,9 @@ if __name__ == '__main__':
             **model_config
         })
 
-        config = PretrainedConfig(
-            projection_dim=args.projection_dim,
-            lr=args.lr,
-            weight_decay=args.weight_decay,
-            warmup_steps=args.warmup_steps,
-            requires_grad=args.requires_grad,
-            logit_scale=args.temp,
-        )
 
         model = CLIPModel(
-            config, 
+            args, 
             atac_config=atac_config, 
             rna_config=rna_config,
         ) 
@@ -134,8 +140,8 @@ if __name__ == '__main__':
         # print(model, flush=True)
 
         # out_dir
-        args.default_root_dir = f'results/{args.data_dir}/vit_{args.temp}_{args.requires_grad}'
-        os.makedirs(args.default_root_dir, exist_ok=True)
+        args.default_root_dir = f'results/{args.data_dir}/vit_{args.logit_scale}_{args.requires_grad}'
+        # os.makedirs(args.default_root_dir, exist_ok=True)
         print('default_root_dir:', args.default_root_dir, flush=True)
 
 
@@ -144,7 +150,7 @@ if __name__ == '__main__':
         callbacks = [
             Monitor(dm), 
             # LearningRateMonitor(logging_interval='epoch'),
-            # EarlyStopping(monitor="loss/val", patience=10)
+            EarlyStopping(monitor="loss/val", patience=10)
         ] 
         trainer = Trainer(
             callbacks=callbacks,
@@ -159,10 +165,38 @@ if __name__ == '__main__':
 
         # fit
         trainer.fit(model, dm) 
+      
+    if not args.fast_dev_run:
+        out_dir = os.path.join(args.default_root_dir, args.data_dir)
+        os.makedirs(out_dir, exist_ok=True) 
+        
+        import pandas as pd
+        import torch
+        import scanpy as sc
+        from anndata import concat
+        sc.settings.figdir = out_dir
 
-
-
-
-
+        log = create_logger(args.data_dir, fh=out_dir+'/log.txt')
+        if args.mod == 'multiome':
+            if args.data_dir == model.config.data_dir:
+                dataloader = dm.val_dataloader()
+                obs = dm.val_dataset.dataset.mdata.obs
+                obs = obs.iloc[dm.val_dataset.indices]
+            else:
+                dataloader = dm.data_loader()
+                obs = dm.dataset.mdata.obs
+            atac_embeds = model.get_batch_atac_features(dataloader, obs)
+            rna_embeds = model.get_batch_rna_features(dataloader, obs)
+            concat_embeds = concat([atac_embeds, rna_embeds], 
+                                    label='modality', keys=['atac', 'rna'], index_unique='#')
+            plot_umap(rna_embeds, color=[args.cell_type], save=f'_rna.png')
+            rna_embeds.write(f'{out_dir}/rna.h5ad')
+            plot_umap(atac_embeds, color=[args.cell_type], save=f'_atac.png')
+            atac_embeds.write(f'{out_dir}/atac.h5ad')
+            plot_umap(concat_embeds, color=[args.cell_type, 'modality'], save=f'_concat.png')
+            concat_embeds.write(f'{out_dir}/concat.h5ad')
+        else:
+            dataloader = dm.dataloader()
+        
        
         
