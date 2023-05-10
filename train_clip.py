@@ -18,7 +18,8 @@ from scclip.vit import ViTConfig
 from scclip.callback import Monitor
 from scclip.config import PretrainedConfig, get_model_config
 from scclip.logger import create_logger
-from scclip.plot import plot_umap
+from scclip.plot import plot_umap, plot_paired_umap
+from scclip.metrics import matching_metrics
 
 import os
 import argparse
@@ -44,6 +45,8 @@ if __name__ == '__main__':
     parser.add_argument('--peak_dist', type=int, default=10_000)
     parser.add_argument('--experiment', action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--mod', type=str, default='multiome')
+    parser.add_argument('--atac', type=str, default=None)
+    parser.add_argument('--rna', type=str, default=None)
     
     # Module
     parser.add_argument("--lr", type=float, default=1.5e-4)
@@ -82,22 +85,8 @@ if __name__ == '__main__':
     seed_everything(args.seed)
 
 
-    if args.checkpoint is not None:
-        model = CLIPModel.load_from_checkpoint(args.checkpoint) 
-        args.default_root_dir = args.checkpoint.split('lightning_logs/')[0]
-        
-        dm = MixDataModule(
-            data_dir = args.data_dir, 
-            modality = args.mod,
-            batch_size=args.batch_size,
-            # n_top_peaks = model.config.peaks,
-            # n_top_genes = model.config.genes.index,
-            linked = args.dist,
-            split = args.split,
-            binary = model.config.binary,
-            use_seq = model.config.use_seq,
-        )
-    else:   
+    if args.checkpoint is None:
+
         dm = MixDataModule(
             data_dir = args.data_dir,
             modality=args.mod, 
@@ -109,7 +98,9 @@ if __name__ == '__main__':
             use_seq = args.use_seq,
         )
 
-
+        args.peaks = dm.dataset.mdata.mod['atac'].var
+        args.genes = dm.dataset.mdata.mod['rna'].var 
+        
         model_config = get_model_config('small')
         atac_config = ViTConfig(**{
             'modality':'atac', 
@@ -140,7 +131,7 @@ if __name__ == '__main__':
         # print(model, flush=True)
 
         # out_dir
-        args.default_root_dir = f'results/{args.data_dir}/vit_{args.logit_scale}_{args.requires_grad}'
+        args.default_root_dir = f'results/{args.data_dir}/vit_{args.logit_scale}_{args.requires_grad}_{args.max_steps}'
         # os.makedirs(args.default_root_dir, exist_ok=True)
         print('default_root_dir:', args.default_root_dir, flush=True)
 
@@ -165,38 +156,58 @@ if __name__ == '__main__':
 
         # fit
         trainer.fit(model, dm) 
+        
+    else:
+        model = CLIPModel.load_from_checkpoint(args.checkpoint) 
+        args.default_root_dir = args.checkpoint.split('lightning_logs/')[0]
+        
+        dm = MixDataModule(
+            data_dir = args.data_dir, 
+            modality = args.mod,
+            batch_size=args.batch_size,
+            n_top_peaks = model.config.peaks,
+            n_top_genes = model.config.genes.index,
+            binary = model.config.binary,
+            use_seq = model.config.use_seq,
+        )
+    
       
     if not args.fast_dev_run:
         out_dir = os.path.join(args.default_root_dir, args.data_dir)
         os.makedirs(out_dir, exist_ok=True) 
-        
-        import pandas as pd
-        import torch
-        import scanpy as sc
-        from anndata import concat
-        sc.settings.figdir = out_dir
 
         log = create_logger(args.data_dir, fh=out_dir+'/log.txt')
         if args.mod == 'multiome':
             if args.data_dir == model.config.data_dir:
                 dataloader = dm.val_dataloader()
-                obs = dm.val_dataset.dataset.mdata.obs
-                obs = obs.iloc[dm.val_dataset.indices]
             else:
-                dataloader = dm.data_loader()
-                obs = dm.dataset.mdata.obs
-            atac_embeds = model.get_batch_atac_features(dataloader, obs)
-            rna_embeds = model.get_batch_rna_features(dataloader, obs)
-            concat_embeds = concat([atac_embeds, rna_embeds], 
-                                    label='modality', keys=['atac', 'rna'], index_unique='#')
-            plot_umap(rna_embeds, color=[args.cell_type], save=f'_rna.png')
-            rna_embeds.write(f'{out_dir}/rna.h5ad')
-            plot_umap(atac_embeds, color=[args.cell_type], save=f'_atac.png')
-            atac_embeds.write(f'{out_dir}/atac.h5ad')
-            plot_umap(concat_embeds, color=[args.cell_type, 'modality'], save=f'_concat.png')
-            concat_embeds.write(f'{out_dir}/concat.h5ad')
+                dataloader = dm.dataloader()
+        if args.rna:
+            rna_dm = MixDataModule(
+                data_dir = args.data_dir, 
+                modality = 'rna',
+                batch_size=args.batch_size,
+                n_top_peaks = model.config.peaks,
+                n_top_genes = model.config.genes.index,
+                binary = model.config.binary,
+                use_seq = model.config.use_seq,
+            )
         else:
-            dataloader = dm.dataloader()
+            rna_dm = None
+        if args.atac:
+            atac_dm = MixDataModule(
+                data_dir = args.data_dir, 
+                modality = 'atac',
+                batch_size=args.batch_size,
+                n_top_peaks = model.config.peaks,
+                n_top_genes = model.config.genes.index,
+                binary = model.config.binary,
+                use_seq = model.config.use_seq,
+            )
+        else:
+            atac_dm = None
+            
+        model.get_batch_features(dataloader, atac_dm, rna_dm, out_dir=out_dir, log=log)
         
        
         

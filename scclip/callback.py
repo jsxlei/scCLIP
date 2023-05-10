@@ -18,18 +18,9 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import pairwise_distances
 
 import os
-from scalex.metrics import silhouette_score, batch_entropy_mixing_score
-from .plot import plot_heatmap, plot_umap, sort_index_by_classes, plot_paired_scatter
-from .metrics import compute_metrics
-from scglue.metrics import (
-    mean_average_precision,
-    normalized_mutual_info,
-    avg_silhouette_width,
-    graph_connectivity,
-    seurat_alignment_score,
-    avg_silhouette_width_batch,
-    neighbor_conservation,
-)
+# from scalex.metrics import silhouette_score, batch_entropy_mixing_score
+from .plot import plot_heatmap, plot_umap, sort_index_by_classes, plot_paired_umap
+
 
 # from .utils import get_attention_maps, default
 from torch.utils.data import Subset, DataLoader
@@ -106,7 +97,8 @@ class Monitor(Callback):
 
         paired = self.get_output(pl_module)
 
-        fig = plot_umap(paired, color=paired.obs.columns, metric=metric, show=False, **kwargs)
+        # fig = plot_umap(paired, color=paired.obs.columns, metric=metric, show=False, **kwargs)
+        fig = plot_paired_umap(paired, color=paired.obs.columns, metric=metric, show=False, **kwargs)
         if score:
             print(compute_metrics(paired=paired, use_rep='X_umap'), flush=True)
         if show:
@@ -116,13 +108,13 @@ class Monitor(Callback):
         else:
             experiment.add_figure('umap', fig, current_step)
         
-        fig = plot_paired_scatter(paired.obsm['X_umap'])
-        if show:
-            plt.title('umap_paired')
-            plt.show()
-            plt.close()
-        else:
-            experiment.add_figure('umap_paired', fig, current_step)
+        # fig = plot_paired_scatter(paired.obsm['X_umap'])
+        # if show:
+        #     plt.title('umap_paired')
+        #     plt.show()
+        #     plt.close()
+        # else:
+        #     experiment.add_figure('umap_paired', fig, current_step)
 
         # norm
         # paired.X = paired.X / np.linalg.norm(paired.X, axis=-1, keepdims=True)

@@ -17,7 +17,12 @@ from .vit import ViTConfig, ViTModel
 
 import time
 from tqdm import tqdm
-from anndata import AnnData
+from anndata import AnnData, concat
+from torch.utils.data import Subset
+
+from scclip.plot import plot_umap, plot_paired_umap
+from scclip.metrics import matching_metrics
+import scanpy as sc
 
 
 
@@ -63,6 +68,21 @@ def kl_div(mu, var):
 def rna_output(x):
     return torch.log1p(x.softmax(dim=-1) * 1e4)
 
+
+# def matching_metrics(similarity):
+#     with torch.no_grad():
+#         batch_size = similarity.shape[0]
+#         acc_x = torch.sum(torch.argmax(similarity, dim=1) == torch.arange(batch_size).to(similarity.device)) / batch_size
+#         acc_y = torch.sum(torch.argmax(similarity, dim=0) == torch.arange(batch_size).to(similarity.device)) / batch_size
+#         foscttm_x = (similarity > torch.diag(similarity)).float().mean(axis=1).mean().item()
+#         foscttm_y = (similarity > torch.diag(similarity)).float().mean(axis=0).mean().item()
+#         matchscore_x = similarity.softmax(dim=1).diag().mean().item()
+#         matchscore_y = similarity.softmax(dim=0).diag().mean().item()
+        
+#         acc = (acc_x + acc_y)/2
+#         foscttm = (foscttm_x + foscttm_y)/2
+#         matchscore = (matchscore_x + matchscore_y)/2
+#         return acc, matchscore, foscttm
     
 def sinkhorn(out):
     Q = torch.exp(out / 0.05).t()  # Q is K-by-B for consistency with notations from our paper
@@ -170,29 +190,15 @@ class CLIPModel(LitModule):
         return atac_embeds, rna_embeds
 
 
-
     def _step(self, batch, batch_idx, mode):
         atac_embeds, rna_embeds = self(batch['atac'], batch['rna'])
         loss, similarity = self.criterion(atac_embeds, rna_embeds)
-        
-        with torch.no_grad():
-            # similarity = output.logits_per_atac
-            batch_size = similarity.shape[0]
-            acc_x = torch.sum(torch.argmax(similarity, dim=1) == torch.arange(batch_size).to(similarity.device)) / batch_size
-            acc_y = torch.sum(torch.argmax(similarity, dim=0) == torch.arange(batch_size).to(similarity.device)) / batch_size
-            foscttm_x = (similarity > torch.diag(similarity)).float().mean(axis=1).mean().item()
-            foscttm_y = (similarity > torch.diag(similarity)).float().mean(axis=0).mean().item()
-            matchscore_x = similarity.softmax(dim=1).diag().mean().item()
-            matchscore_y = similarity.softmax(dim=0).diag().mean().item()
             
-            acc = (acc_x + acc_y)/2
-            foscttm = (foscttm_x + foscttm_y)/2
-            matchscore = (matchscore_x + matchscore_y)/2
-            
+        acc, matchscore, foscttm = matching_metrics(similarity)
         log_dict = {
             f'acc/{mode}': acc,
-            f'foscttm/{mode}': foscttm,
             f'matchscore/{mode}': matchscore,
+            f'foscttm/{mode}': foscttm,
             f'loss/{mode}': loss,
         }
 
@@ -241,17 +247,44 @@ class CLIPModel(LitModule):
 
         return atac_features
     
-    def get_batch_rna_features(self, dataloader, obs):
-        self.to('cuda')
-        adata = torch.concat([self._get_rna_features(batch['rna'].to('cuda')).detach().cpu() 
-                              for batch in tqdm(dataloader, desc='rna')]).numpy()
-        adata = AnnData(adata, obs=obs)
-        return adata
     
-    def get_batch_atac_features(self, dataloader, obs):
+    def _get_batch_features(self, dataloader, modality='rna', cell_type='cell_type', out_dir='.'):
+        if isinstance(dataloader.dataset, Subset):
+            obs = dataloader.dataset.dataset.mdata.obs.iloc[dataloader.dataset.indices]
+        else:
+            obs = dataloader.dataset.mdata.obs
+            
         self.to('cuda')
-        adata = torch.concat([self._get_atac_features(batch['atac'].to('cuda')).detach().cpu()
-                              for batch in tqdm(dataloader, desc='atac')]).numpy()
+        fn = self._get_rna_features if modality == 'rna' else self._get_atac_features
+        adata = torch.concat([fn(batch[modality].to('cuda')).detach().cpu()
+                              for batch in tqdm(dataloader, desc=modality)]).numpy()
         adata = AnnData(adata, obs=obs)
+        sc.settings.figdir = out_dir
+        plot_umap(adata, color=cell_type, save=f'_{modality}.png')
+        adata.write(f'{out_dir}/{modality}.h5ad')
         return adata
         
+
+    def get_batch_features(self, dataloader, atac=None, rna=None, celltype='cell_type', out_dir='.', log=None):
+        if dataloader is not None:
+            rna_embeds = self._get_batch_features(dataloader, modality='rna', out_dir=out_dir)
+            atac_embeds = self._get_batch_features(dataloader, modality='atac', out_dir=out_dir)
+            
+        if rna is not None:
+            rna_embeds = self._get_batch_features(rna.dataloader(), out_dir=out_dir, modality='rna')
+        if atac is not None:
+            atac_embeds = self._get_batch_features(atac.dataloader(), out_dir=out_dir, modality='atac')
+        
+        if atac is not None and rna is not None or dataloader is not None:
+            acc, match_score, foscttm = matching_metrics(x=atac_embeds.obsm['X_umap'], y=rna_embeds.obsm['X_umap'])
+            if log is not None:
+                log.info(f'atac-rna\nacc: {acc:.4f}\nmatching score: {match_score:.4f}\nfoscttm: {foscttm:.4f}')
+            else:
+                print(f'atac-rna\nacc: {acc:.4f}\nmatching score: {match_score:.4f}\nfoscttm: {foscttm:.4f}', flush=True)
+            concat_embeds = concat([atac_embeds, rna_embeds], label='modality', keys=['atac', 'rna'], index_unique='#')
+            sc.settings.figdir = out_dir
+            if dataloader is not None:
+                plot_paired_umap(concat_embeds, color=celltype, save=os.path.join(out_dir, 'umap_concat.png'))
+            else:
+                plot_umap(concat_embeds, color=celltype, save='_concat.png')
+            concat_embeds.write(f'{out_dir}/concat.h5ad')

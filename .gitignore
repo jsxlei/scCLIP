@@ -5,5 +5,7 @@ scclip.egg-info/*
 *.ipynb_checkpoints
 log/*
 scripts/*
+benchmarks/*
+jupyters/*
 results/*
 

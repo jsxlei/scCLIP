@@ -36,8 +36,6 @@ pynn_dist_fns_fda["dot"]["correction"] = correct_alternative_cosine
 
 # import scanpy as sc
 
-
-
 def plot_paired_scatter(concat, cmap=plt.cm.tab10.colors): # TO DO
     plt.figure(figsize=(4,4))
     plt.plot(concat[:, 0].reshape(2, -1), concat[:, 1].reshape(2, -1), 
@@ -49,7 +47,7 @@ def plot_paired_scatter(concat, cmap=plt.cm.tab10.colors): # TO DO
         s=min(10, 12000/len(concat)),
         c=[cmap[0]]*(len(concat)//2)+[cmap[1]]*(len(concat)//2)
     )
-                # c=['green']*(len(concat)//2)+['orange']*(len(concat)//2))
+
     plt.gca().set_facecolor('white')
     plt.xticks([], [])
     plt.yticks([], [])
@@ -59,6 +57,7 @@ def plot_paired_scatter(concat, cmap=plt.cm.tab10.colors): # TO DO
     # plt.axis('off')
     plt.xlabel('UMAP1')
     plt.ylabel('UMAP2')
+    plt.tight_layout()
     return plt.gcf()
 
 
@@ -77,9 +76,13 @@ def plot_umap(
     sc.pp.neighbors(adata, metric=metric, use_rep=use_rep) #, n_neighbors=n_neighbors),
     sc.tl.leiden(adata)
     sc.tl.umap(adata) #, min_dist=min_dist)
+
     
     if 'show' in pl_kwargs and not pl_kwargs['show']:
         axis = sc.pl.umap(adata, color=color, save=save, wspace=0.4, ncols=4, **pl_kwargs)
+        # concat = adata.obsm['X_umap']
+        # plt.plot(concat[:, 0].reshape(2, -1), concat[:, 1].reshape(2, -1), 
+        # color='gray', linestyle='dashed', linewidth=0.5)
         return axis[0].figure if isinstance(axis, list) else axis.figure
     else:
         sc.pl.umap(adata, color=color, save=save, wspace=0.65, ncols=4, show=False, **pl_kwargs)
@@ -87,7 +90,42 @@ def plot_umap(
     # plt.close('all')
     # return 
         
+def plot_paired_umap(
+    adata, 
+    color=['cell_type', 'modality'],
+    save=None,
+    n_neighbors=30, 
+    min_dist=0.5, 
+    metric='euclidean', #'correlation',  
+    use_rep='X',
+    # **tl_kwargs,
+    **pl_kwargs,
+):
+    sc.settings.set_figure_params(dpi=80, facecolor='white',figsize=(4,4), frameon=True)
+    sc.pp.neighbors(adata, metric=metric, use_rep=use_rep) #, n_neighbors=n_neighbors),
+    sc.tl.leiden(adata)
+    sc.tl.umap(adata) #, min_dist=min_dist)
 
+    ncols=2
+    nrows=1
+    figsize=4
+    wspace=0.5
+    fig,axs = plt.subplots(nrows=nrows, ncols=ncols,
+                           figsize=(ncols*figsize+figsize*wspace*(ncols-1),nrows*figsize))
+    # plt.subplots_adjust(wspace=wspace)
+
+    sc.pl.umap(adata, color='cell_type', ax=axs[0], show=False, legend_loc='on data')
+    sc.pl.umap(adata, color='modality', ax=axs[1], show=False)
+    concat = adata.obsm['X_umap']
+    plt.plot(concat[:, 0].reshape(2, -1), concat[:, 1].reshape(2, -1), 
+            color='gray', linestyle='dashed', linewidth=0.5)
+    plt.tight_layout()
+    
+    if save:
+        plt.savefig(save)
+    else:
+        return plt.gcf()
+    
 
 def plot_heatmap(X, obs_names=None,  var_names=None,  col_cluster=False, row_cluster=False, col_title='', row_title='', sort=False,cmap='viridis', cax_visible=True, **kwargs): # TO DO: support obs_names as pd.DataFrame
     if obs_names is not None:
