@@ -65,92 +65,6 @@ def kl_div(mu, var):
     ).sum(dim=1).mean()
 
 
-def rna_output(x):
-    return torch.log1p(x.softmax(dim=-1) * 1e4)
-
-
-# def matching_metrics(similarity):
-#     with torch.no_grad():
-#         batch_size = similarity.shape[0]
-#         acc_x = torch.sum(torch.argmax(similarity, dim=1) == torch.arange(batch_size).to(similarity.device)) / batch_size
-#         acc_y = torch.sum(torch.argmax(similarity, dim=0) == torch.arange(batch_size).to(similarity.device)) / batch_size
-#         foscttm_x = (similarity > torch.diag(similarity)).float().mean(axis=1).mean().item()
-#         foscttm_y = (similarity > torch.diag(similarity)).float().mean(axis=0).mean().item()
-#         matchscore_x = similarity.softmax(dim=1).diag().mean().item()
-#         matchscore_y = similarity.softmax(dim=0).diag().mean().item()
-        
-#         acc = (acc_x + acc_y)/2
-#         foscttm = (foscttm_x + foscttm_y)/2
-#         matchscore = (matchscore_x + matchscore_y)/2
-#         return acc, matchscore, foscttm
-    
-def sinkhorn(out):
-    Q = torch.exp(out / 0.05).t()  # Q is K-by-B for consistency with notations from our paper
-    B = Q.shape[1]  # number of samples to assign
-    K = Q.shape[0]  # how many prototypes
-
-    # make the matrix sums to 1
-    sum_Q = torch.sum(Q)
-    Q /= sum_Q
-
-    for it in range(3):
-        # normalize each row: total weight per prototype must be 1/K
-        sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
-        Q /= sum_of_rows
-        Q /= K
-
-        # normalize each column: total weight per sample must be 1/B
-        Q /= torch.sum(Q, dim=0, keepdim=True)
-        Q /= B
-
-    Q *= B  # the colomns must sum to 1 so that Q is an assignment
-    return Q.t()
-
-def compute_similarities(I_emb, T_emb):
-    sim_ii, sim_tt = I_emb @ I_emb.t(), T_emb @ T_emb.t()
-    sim_it, sim_ti = I_emb @ T_emb.t(), T_emb @ I_emb.t()
-    return sim_ii, sim_tt, sim_it, sim_ti
-
-
-
-
-@dataclass
-class CLIPOutput(ModelOutput):
-    """
-    Args:
-        loss (`torch.FloatTensor` of shape `(1,)`, *optional*, returned when `return_loss` is `True`):
-            Contrastive loss for atac-rna similarity.
-        logits_per_atac:(`torch.FloatTensor` of shape `(atac_batch_size, rna_batch_size)`):
-            The scaled dot product scores between `atac_embeds` and `rna_embeds`. This represents the atac-rna
-            similarity scores.
-        logits_per_rna:(`torch.FloatTensor` of shape `(rna_batch_size, atac_batch_size)`):
-            The scaled dot product scores between `rna_embeds` and `atac_embeds`. This represents the rna-atac
-            similarity scores.
-        rna_embeds(`torch.FloatTensor` of shape `(batch_size, output_dim`):
-            The rna embeddings obtained by applying the projection layer to the pooled output of [`CLIPRnaModel`].
-        atac_embeds(`torch.FloatTensor` of shape `(batch_size, output_dim`):
-            The atac embeddings obtained by applying the projection layer to the pooled output of [`CLIPAtacModel`].
-        rna_model_output(`BaseModelOutputWithPooling`):
-            The output of the [`CLIPRnaModel`].
-        atac_model_output(`BaseModelOutputWithPooling`):
-            The output of the [`CLIPAtacModel`].
-    """
-
-    loss: Optional[torch.FloatTensor] = None
-    logits_per_atac: torch.FloatTensor = None
-    logits_per_rna: torch.FloatTensor = None
-    atac_embeds: torch.FloatTensor = None
-    rna_embeds: torch.FloatTensor = None
-    atac_outputs: BaseModelOutputWithPooling = None
-    rna_outputs: BaseModelOutputWithPooling = None
-
-    def to_tuple(self) -> Tuple[Any]:
-        return tuple(
-            self[k] if k not in ["rna_model_output", "atac_model_output"] else getattr(self, k).to_tuple()
-            for k in self.keys()
-        )
-
-
 
 
 
@@ -190,9 +104,10 @@ class CLIPModel(LitModule):
         return atac_embeds, rna_embeds
 
 
-    def _step(self, batch, batch_idx, mode):
+    def _step(self, batch, batch_idx, mode): # TO DO: add reconstruction
         atac_embeds, rna_embeds = self(batch['atac'], batch['rna'])
         loss, similarity = self.criterion(atac_embeds, rna_embeds)
+        
             
         acc, matchscore, foscttm = matching_metrics(similarity)
         log_dict = {

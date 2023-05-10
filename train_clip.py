@@ -16,10 +16,9 @@ from scclip.data import MixDataModule
 from scclip.clip import CLIPModel
 from scclip.vit import ViTConfig
 from scclip.callback import Monitor
-from scclip.config import PretrainedConfig, get_model_config
+from scclip.config import get_model_config
 from scclip.logger import create_logger
-from scclip.plot import plot_umap, plot_paired_umap
-from scclip.metrics import matching_metrics
+
 
 import os
 import argparse
@@ -131,7 +130,7 @@ if __name__ == '__main__':
         # print(model, flush=True)
 
         # out_dir
-        args.default_root_dir = f'results/{args.data_dir}/vit_{args.logit_scale}_{args.requires_grad}_{args.max_steps}'
+        args.default_root_dir = f'results/{args.data_dir}/vit_{args.logit_scale}_{args.requires_grad}_{args.max_steps}_{args.lr}'
         # os.makedirs(args.default_root_dir, exist_ok=True)
         print('default_root_dir:', args.default_root_dir, flush=True)
 
