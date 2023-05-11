@@ -62,7 +62,7 @@ if __name__ == '__main__':
     parser.add_argument('--projection_dim', type=int, default=128)
     parser.add_argument('--requires_grad', action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument('--normalize', action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--version", type=str, default='v2')
+    parser.add_argument("--version", type=str, default='')
     
     parser.add_argument("--max_steps", type=int, default=30000)
     parser.add_argument("--fast_dev_run", action='store_true', default=False)
@@ -74,8 +74,10 @@ if __name__ == '__main__':
     parser.add_argument('--test_data', type=str, default='ADRD')
     parser.add_argument('--cell_type', type=str, default='cell_type')
     parser.add_argument('--use_seq', action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument('--logit_scale', type=float, default=2.6592)
+    parser.add_argument('--logit_scale', type=float, default=1) #2.6592)
     parser.add_argument('--num_patches', type=int, default=128)
+    parser.add_argument('--early_stop', action=argparse.BooleanOptionalAction, default=False)
+
 
     # parser = Trainer.add_argparse_args(parser)
 
@@ -130,7 +132,7 @@ if __name__ == '__main__':
         # print(model, flush=True)
 
         # out_dir
-        args.default_root_dir = f'results/{args.data_dir}/vit_{args.logit_scale}_{args.requires_grad}_{args.max_steps}_{args.lr}'
+        args.default_root_dir = f'results/{args.data_dir}/vit_{args.logit_scale}_{args.requires_grad}_{args.max_steps}_{args.lr}_{args.version}'
         # os.makedirs(args.default_root_dir, exist_ok=True)
         print('default_root_dir:', args.default_root_dir, flush=True)
 
@@ -138,10 +140,11 @@ if __name__ == '__main__':
         # trainer
         logger = TensorBoardLogger(save_dir=args.default_root_dir, default_hp_metric=False, version='')
         callbacks = [
-            Monitor(dm), 
+            Monitor(dm, metric='cosine'), 
             # LearningRateMonitor(logging_interval='epoch'),
-            EarlyStopping(monitor="loss/val", patience=10)
         ] 
+        if args.early_stop:
+            callbacks.append(EarlyStopping(monitor="loss/val", patience=10))
         trainer = Trainer(
             callbacks=callbacks,
             accelerator = 'gpu',
@@ -158,6 +161,8 @@ if __name__ == '__main__':
         
     else:
         model = CLIPModel.load_from_checkpoint(args.checkpoint) 
+        print('normalize', args.normalize, flush=True)
+        model.config.normalize = args.normalize
         args.default_root_dir = args.checkpoint.split('lightning_logs/')[0]
         
         dm = MixDataModule(
@@ -175,7 +180,6 @@ if __name__ == '__main__':
         out_dir = os.path.join(args.default_root_dir, args.data_dir)
         os.makedirs(out_dir, exist_ok=True) 
 
-        log = create_logger(args.data_dir, fh=out_dir+'/log.txt')
         if args.mod == 'multiome':
             if args.data_dir == model.config.data_dir:
                 dataloader = dm.val_dataloader()
@@ -206,7 +210,7 @@ if __name__ == '__main__':
         else:
             atac_dm = None
             
-        model.get_batch_features(dataloader, atac_dm, rna_dm, out_dir=out_dir, log=log)
+        model.get_batch_features(dataloader, atac_dm, rna_dm, out_dir=out_dir)
         
        
         

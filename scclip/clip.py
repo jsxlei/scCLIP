@@ -22,6 +22,7 @@ from torch.utils.data import Subset
 
 from scclip.plot import plot_umap, plot_paired_umap
 from scclip.metrics import matching_metrics
+from scclip.logger import create_logger
 import scanpy as sc
 
 
@@ -144,8 +145,8 @@ class CLIPModel(LitModule):
         rna_features = rna_outputs[1]
         rna_features = self.rna_projection(rna_features)
 
-        # if self.normalize:
-        rna_features = rna_features / rna_features.norm(dim=-1, keepdim=True)
+        if self.config.normalize:
+            rna_features = rna_features / rna_features.norm(dim=-1, keepdim=True)
 
         return rna_features
 
@@ -157,8 +158,8 @@ class CLIPModel(LitModule):
         atac_features = atac_outputs[1]  # pooled_output
         atac_features = self.atac_projection(atac_features)
 
-        # if self.normalize:
-        atac_features = atac_features / atac_features.norm(dim=-1, keepdim=True)
+        if self.config.normalize:
+            atac_features = atac_features / atac_features.norm(dim=-1, keepdim=True)
 
         return atac_features
     
@@ -175,12 +176,16 @@ class CLIPModel(LitModule):
                               for batch in tqdm(dataloader, desc=modality)]).numpy()
         adata = AnnData(adata, obs=obs)
         sc.settings.figdir = out_dir
-        plot_umap(adata, color=cell_type, save=f'_{modality}.png')
+        plot_umap(adata, color=cell_type, metrics='cosine', save=f'_{modality}.png')
         adata.write(f'{out_dir}/{modality}.h5ad')
         return adata
         
 
-    def get_batch_features(self, dataloader, atac=None, rna=None, celltype='cell_type', out_dir='.', log=None):
+    def get_batch_features(self, dataloader, atac=None, rna=None, celltype='cell_type', out_dir='.'):
+        log = create_logger('', fh=out_dir+'/log.txt')
+        if not self.config.normalize:
+            out_dir = f'{out_dir}_{no_norm}'
+
         if dataloader is not None:
             rna_embeds = self._get_batch_features(dataloader, modality='rna', out_dir=out_dir)
             atac_embeds = self._get_batch_features(dataloader, modality='atac', out_dir=out_dir)
@@ -199,7 +204,8 @@ class CLIPModel(LitModule):
             concat_embeds = concat([atac_embeds, rna_embeds], label='modality', keys=['atac', 'rna'], index_unique='#')
             sc.settings.figdir = out_dir
             if dataloader is not None:
-                plot_paired_umap(concat_embeds, color=celltype, save=os.path.join(out_dir, 'umap_concat.png'))
+                plot_umap(concat_embeds, color=[celltype, 'modality'], metrics='cosine', save='_concat.png')
+                # plot_paired_umap(concat_embeds, color=celltype, save=os.path.join(out_dir, 'umap_concat.png'))
             else:
-                plot_umap(concat_embeds, color=celltype, save='_concat.png')
+                plot_umap(concat_embeds, color=celltype, metrics='cosine', save='_concat.png')
             concat_embeds.write(f'{out_dir}/concat.h5ad')

@@ -34,32 +34,6 @@ pynn_dist_fns_fda["cosine"]["correction"] = correct_alternative_cosine
 pynn_dist_fns_fda["dot"]["correction"] = correct_alternative_cosine
 
 
-# import scanpy as sc
-
-def plot_paired_scatter(concat, cmap=plt.cm.tab10.colors): # TO DO
-    plt.figure(figsize=(4,4))
-    plt.plot(concat[:, 0].reshape(2, -1), concat[:, 1].reshape(2, -1), 
-            color='gray', linestyle='dashed', linewidth=0.5)
-    # concat = np.concatenate([X, Y])
-    plt.scatter(
-        concat[:, 0],
-        concat[:, 1],
-        s=min(10, 12000/len(concat)),
-        c=[cmap[0]]*(len(concat)//2)+[cmap[1]]*(len(concat)//2)
-    )
-
-    plt.gca().set_facecolor('white')
-    plt.xticks([], [])
-    plt.yticks([], [])
-    # plt.set_xticks([])
-    # plt.set_yticks([])
-    # plt.grid(False)
-    # plt.axis('off')
-    plt.xlabel('UMAP1')
-    plt.ylabel('UMAP2')
-    plt.tight_layout()
-    return plt.gcf()
-
 
 def plot_umap(
     adata, 
@@ -80,9 +54,6 @@ def plot_umap(
     
     if 'show' in pl_kwargs and not pl_kwargs['show']:
         axis = sc.pl.umap(adata, color=color, save=save, wspace=0.4, ncols=4, **pl_kwargs)
-        # concat = adata.obsm['X_umap']
-        # plt.plot(concat[:, 0].reshape(2, -1), concat[:, 1].reshape(2, -1), 
-        # color='gray', linestyle='dashed', linewidth=0.5)
         return axis[0].figure if isinstance(axis, list) else axis.figure
     else:
         sc.pl.umap(adata, color=color, save=save, wspace=0.65, ncols=4, show=False, **pl_kwargs)
