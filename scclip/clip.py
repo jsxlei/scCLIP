@@ -176,7 +176,7 @@ class CLIPModel(LitModule):
                               for batch in tqdm(dataloader, desc=modality)]).numpy()
         adata = AnnData(adata, obs=obs)
         sc.settings.figdir = out_dir
-        plot_umap(adata, color=cell_type, metrics='cosine', save=f'_{modality}.png')
+        plot_umap(adata, color=cell_type, metric='cosine', save=f'_{modality}.png')
         adata.write(f'{out_dir}/{modality}.h5ad')
         return adata
         
@@ -184,7 +184,7 @@ class CLIPModel(LitModule):
     def get_batch_features(self, dataloader, atac=None, rna=None, celltype='cell_type', out_dir='.'):
         log = create_logger('', fh=out_dir+'/log.txt')
         if not self.config.normalize:
-            out_dir = f'{out_dir}_{no_norm}'
+            out_dir = f'{out_dir}_no_norm'
 
         if dataloader is not None:
             rna_embeds = self._get_batch_features(dataloader, modality='rna', out_dir=out_dir)
@@ -204,8 +204,8 @@ class CLIPModel(LitModule):
             concat_embeds = concat([atac_embeds, rna_embeds], label='modality', keys=['atac', 'rna'], index_unique='#')
             sc.settings.figdir = out_dir
             if dataloader is not None:
-                plot_umap(concat_embeds, color=[celltype, 'modality'], metrics='cosine', save='_concat.png')
+                plot_umap(concat_embeds, color=[celltype, 'modality'], metric='cosine', save='_concat.png')
                 # plot_paired_umap(concat_embeds, color=celltype, save=os.path.join(out_dir, 'umap_concat.png'))
             else:
-                plot_umap(concat_embeds, color=celltype, metrics='cosine', save='_concat.png')
+                plot_umap(concat_embeds, color=celltype, metric='cosine', save='_concat.png')
             concat_embeds.write(f'{out_dir}/concat.h5ad')
