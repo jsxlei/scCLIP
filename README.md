@@ -1,4 +1,5 @@
 # Multi-modal Single-cell Integration using Transformers with Contrastive Learning
+![](scCLIP.jpg)
 
 ## Download data 
 Download [multiome](https://www.dropbox.com/sh/70caiyjydx3jnq1/AAB51h6PCX9IGgi8jyT5KMhaa?dl=0) data folder under data/  
