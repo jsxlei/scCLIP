@@ -41,6 +41,7 @@ if __name__ == '__main__':
     parser.add_argument("--n_top_genes", type=int, default=None)
     parser.add_argument("--binary", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--dist', type=str, default=None)
+    parser.add_argument('--mask', type=float, default=None)
     parser.add_argument('--peak_dist', type=int, default=10_000)
     parser.add_argument('--experiment', action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--mod', type=str, default='multiome')
@@ -97,6 +98,7 @@ if __name__ == '__main__':
             n_top_genes = args.n_top_genes,
             binary = args.binary,
             use_seq = args.use_seq,
+            mask = args.mask,
         )
 
         args.peaks = dm.dataset.mdata.mod['atac'].var
@@ -132,7 +134,10 @@ if __name__ == '__main__':
         # print(model, flush=True)
 
         # out_dir
-        args.default_root_dir = f'results/{args.data_dir}/vit_{args.logit_scale}_{args.requires_grad}_{args.max_steps}_{args.lr}_{args.version}'
+        if args.experiment:
+            args.default_root_dir = f'results/{args.data_dir}/{args.logit_scale}_{args.requires_grad}_{args.max_steps}_{args.lr}_{args.version}'
+        else:
+            args.default_root_dir = f'results/{args.data_dir}/{args.logit_scale}_{args.max_steps}'
         # os.makedirs(args.default_root_dir, exist_ok=True)
         print('default_root_dir:', args.default_root_dir, flush=True)
 

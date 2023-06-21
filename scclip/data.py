@@ -23,6 +23,7 @@ class BaseDataset(Dataset):
         n_top_peaks: int = None,
         split: Union[float, str, list] = 0.9,
         linked: Union[bool, int] = 100_000,
+        mask: float = None,
         binary: bool = True,
         verbose: bool = False,
         use_seq: bool = False,
@@ -36,6 +37,7 @@ class BaseDataset(Dataset):
         self.n_top_peaks = n_top_peaks
         self.verbose = verbose
         self.linked = linked
+        self.mask = mask
         self.binary = binary
         self.use_seq = use_seq
         self.cell_type = cell_type
@@ -119,20 +121,25 @@ class BaseDataset(Dataset):
     ## RNA specific functions
 
     def get_rna(self, index):
-        return self.mdata['rna'].X[index].toarray().squeeze()
+        x = self.mdata['rna'].X[index].toarray().squeeze()
+        if self.mask is not None:
+            index = np.where(x > 0)[0]
+            index = np.random.choice(index, size=int(len(index) * self.mask), replace=False)
+            x[index] = 0
+        return x
     
     def _preprocess_rna(self):
         rna = self.mdata.mod['rna']
-        rna.var_names_make_unique()
+        # rna.var_names_make_unique()
         
-        rna.var['mt'] = rna.var_names.str.startswith('MT-')
-        sc.pp.calculate_qc_metrics(rna, qc_vars=['mt'], percent_top=None, log1p=False, inplace=True)
+        # rna.var['mt'] = rna.var_names.str.startswith('MT-')
+        # sc.pp.calculate_qc_metrics(rna, qc_vars=['mt'], percent_top=None, log1p=False, inplace=True)
 
-        # control quality
-        mu.pp.filter_var(rna, 'n_cells_by_counts', lambda x: x >= 3)
-        mu.pp.filter_obs(rna, 'n_genes_by_counts', lambda x: (x >= 200) & (x < 5000))
-        mu.pp.filter_obs(rna, 'total_counts', lambda x: x < 15000)
-        mu.pp.filter_obs(rna, 'pct_counts_mt', lambda x: x < 20)
+        # # control quality
+        # mu.pp.filter_var(rna, 'n_cells_by_counts', lambda x: x >= 3)
+        # mu.pp.filter_obs(rna, 'n_genes_by_counts', lambda x: (x >= 200) & (x < 5000))
+        # mu.pp.filter_obs(rna, 'total_counts', lambda x: x < 15000)
+        # mu.pp.filter_obs(rna, 'pct_counts_mt', lambda x: x < 20)
 
         rna = rna[:, [gene for gene in rna.var_names 
                   if not str(gene).startswith(tuple(['ERCC', 'MT-', 'mt-', 'mt']))]].copy()
@@ -178,14 +185,19 @@ class BaseDataset(Dataset):
     ## ATAC specific functions
 
     def get_atac(self, index):
-        return self.mdata['atac'].X[index].toarray().squeeze()
+        x = self.mdata['atac'].X[index].toarray().squeeze()
+        if self.mask is not None:
+            index = np.where(x > 0)[0]
+            index = np.random.choice(index, size=int(len(index) * self.mask), replace=False)
+            x[index] = 0
+        return x
     
     def _preprocess_atac(self):
         atac = self.mdata.mod['atac']
-        sc.pp.calculate_qc_metrics(atac, percent_top=None, log1p=False, inplace=True)
-        mu.pp.filter_var(atac, 'n_cells_by_counts', lambda x: x >= 10)
-        mu.pp.filter_obs(atac, 'n_genes_by_counts', lambda x: (x >= 500) & (x <= 15000))
-        mu.pp.filter_obs(atac, 'total_counts', lambda x: (x >= 1000) & (x <= 40000))
+        # sc.pp.calculate_qc_metrics(atac, percent_top=None, log1p=False, inplace=True)
+        # mu.pp.filter_var(atac, 'n_cells_by_counts', lambda x: x >= 10)
+        # mu.pp.filter_obs(atac, 'n_genes_by_counts', lambda x: (x >= 500) & (x <= 15000))
+        # mu.pp.filter_obs(atac, 'total_counts', lambda x: (x >= 1000) & (x <= 40000))
         
         atac.X[atac.X>0] = 1
         atac.var_names_make_unique()
@@ -224,8 +236,8 @@ class BaseDataset(Dataset):
 
     def get_multiome(self, index):
         return {
-            'atac': self.mdata.mod['atac'].X[index].toarray().squeeze(), 
-            'rna': self.mdata.mod['rna'].X[index].toarray().squeeze()
+            'atac': self.get_atac(index),#self.mdata.mod['atac'].X[index].toarray().squeeze(), 
+            'rna': self.get_rna(index) #self.mdata.mod['rna'].X[index].toarray().squeeze()
         }
     
     def _preprocess_multiome(self):
