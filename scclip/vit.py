@@ -4,10 +4,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, List, Optional, Set, Tuple, Union
 from transformers import ViTModel, PreTrainedModel, PretrainedConfig, ViTPreTrainedModel
-from transformers.models.vit.modeling_vit import ViTEncoder, ViTPooler, BaseModelOutputWithPooling, ViTLayer #, MaskedLMOutput
+from transformers.models.vit.modeling_vit import (
+    ViTEncoder,
+    ViTPooler,
+    BaseModelOutputWithPooling,
+    ViTLayer,
+)  # , MaskedLMOutput
 from transformers.utils import ModelOutput
 from dataclasses import dataclass
 from einops import rearrange
+
 
 @dataclass
 class MaskedLMOutput(ModelOutput):
@@ -41,7 +47,7 @@ class ViTConfig(PretrainedConfig):
         num_channels=3,
         qkv_bias=True,
         encoder_stride=16,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
@@ -65,21 +71,21 @@ class ViTConfig(PretrainedConfig):
 
 
 class MAEConfig(PretrainedConfig):
-    model_type = 'mae'
+    model_type = "mae"
 
     def __init__(
         self,
-        hidden_size:int=512,
-        num_hidden_layers:int=6,
-        num_attention_heads:int=8,
-        intermediate_size:int=2048,
-        hidden_act:str="gelu",
+        hidden_size: int = 512,
+        num_hidden_layers: int = 6,
+        num_attention_heads: int = 8,
+        intermediate_size: int = 2048,
+        hidden_act: str = "gelu",
         hidden_dropout_prob=0.0,
-        attention_probs_dropout_prob=0.0, 
+        attention_probs_dropout_prob=0.0,
         initializer_range=0.02,
         layer_norm_eps=1e-12,
         is_encoder_decoder=False,
-        feature_size=None, # new_added
+        feature_size=None,  # new_added
         num_patches=128,
         # patch_size:int=64, # to adjust
         qkv_bias=True,
@@ -87,13 +93,13 @@ class MAEConfig(PretrainedConfig):
         decoder_hidden_size=512,
         decoder_num_hidden_layers=4,
         decoder_intermediate_size=2048,
-        mask_ratio:float=0.75,
+        mask_ratio: float = 0.75,
         norm_pix_loss=False,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
-        feature_sizes = {'rna': 36601, 'atac': 1154464} # tabula 58870
+        feature_sizes = {"rna": 36601, "atac": 1154464}  # tabula 58870
 
         self.hidden_size = hidden_size
         self.num_hidden_layers = num_hidden_layers
@@ -104,7 +110,7 @@ class MAEConfig(PretrainedConfig):
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
         self.initializer_range = initializer_range
         self.layer_norm_eps = layer_norm_eps
-        self.feature_size = feature_size #if feature_size is not None else feature_sizes[modality]# new added
+        self.feature_size = feature_size  # if feature_size is not None else feature_sizes[modality]# new added
         self.num_patches = num_patches
         # self.patch_size = patch_size
         self.qkv_bias = qkv_bias
@@ -125,17 +131,22 @@ class ViTEmbeddings(nn.Module):
         super().__init__()
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, config.hidden_size))
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, config.hidden_size)) if use_mask_token else None
+        self.mask_token = (
+            nn.Parameter(torch.zeros(1, 1, config.hidden_size))
+            if use_mask_token
+            else None
+        )
         self.patch_embeddings = PatchEmbeddings(config)
 
         num_patches = self.patch_embeddings.num_patches
-        self.position_embeddings = nn.Parameter(torch.zeros(1, num_patches + 1, config.hidden_size))
+        self.position_embeddings = nn.Parameter(
+            torch.zeros(1, num_patches + 1, config.hidden_size)
+        )
 
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.config = config
         self.num_patches = num_patches
         self.patch_size = self.patch_embeddings.patch_size
-
 
     def forward(
         self,
@@ -145,7 +156,9 @@ class ViTEmbeddings(nn.Module):
     ) -> torch.Tensor:
         # batch_size, num_channels, height, width = pixel_values.shape
         batch_size = pixel_values.shape[0]
-        embeddings = self.patch_embeddings(pixel_values)# , interpolate_pos_encoding=interpolate_pos_encoding)
+        embeddings = self.patch_embeddings(
+            pixel_values
+        )  # , interpolate_pos_encoding=interpolate_pos_encoding)
 
         if bool_masked_pos is not None:
             seq_length = embeddings.shape[1]
@@ -171,11 +184,18 @@ class PatchEmbeddings(nn.Module):
     Image to Patch Embedding.
 
     """
-    def __init__(self, config): #feature_size, patch_size, embed_dim):
+
+    def __init__(self, config):  # feature_size, patch_size, embed_dim):
         super().__init__()
-        feature_size, num_patches, embed_dim = config.feature_size, config.num_patches, config.hidden_size
-        patch_size = math.ceil(feature_size / num_patches) #; print(patch_size); import pdb; pdb.set_trace()
-        pad_size = num_patches*patch_size - feature_size
+        feature_size, num_patches, embed_dim = (
+            config.feature_size,
+            config.num_patches,
+            config.hidden_size,
+        )
+        patch_size = math.ceil(
+            feature_size / num_patches
+        )  # ; print(patch_size); import pdb; pdb.set_trace()
+        pad_size = num_patches * patch_size - feature_size
         self.pad_size = pad_size
         self.num_patches = num_patches
         self.feature_size = feature_size
@@ -183,21 +203,28 @@ class PatchEmbeddings(nn.Module):
         self.projection = nn.Linear(patch_size, embed_dim)
 
     def forward(self, x):
-        x = F.pad(x, (0, self.pad_size)).view(x.shape[0], self.num_patches, self.patch_size)
+        x = F.pad(x, (0, self.pad_size)).view(
+            x.shape[0], self.num_patches, self.patch_size
+        )
         x = self.projection(x)
         return x
 
 
 from copy import deepcopy
 from transformers.models.vit_mae.modeling_vit_mae import ViTMAEDecoderOutput
+
+
 class ViTDecoder(nn.Module):
     def __init__(self, config, patch_size):
         super().__init__()
         num_patches = config.num_patches
-        self.decoder_embed = nn.Linear(config.hidden_size, config.decoder_hidden_size, bias=True)
+        self.decoder_embed = nn.Linear(
+            config.hidden_size, config.decoder_hidden_size, bias=True
+        )
         self.mask_token = nn.Parameter(torch.zeros(1, 1, config.decoder_hidden_size))
         self.decoder_pos_embed = nn.Parameter(
-            torch.zeros(1, num_patches + 1, config.decoder_hidden_size), requires_grad=False
+            torch.zeros(1, num_patches + 1, config.decoder_hidden_size),
+            requires_grad=False,
         )  # fixed sin-cos embedding
 
         decoder_config = deepcopy(config)
@@ -209,9 +236,13 @@ class ViTDecoder(nn.Module):
             [ViTLayer(decoder_config) for _ in range(config.decoder_num_hidden_layers)]
         )
 
-        self.decoder_norm = nn.LayerNorm(config.decoder_hidden_size, eps=config.layer_norm_eps)
+        self.decoder_norm = nn.LayerNorm(
+            config.decoder_hidden_size, eps=config.layer_norm_eps
+        )
         self.decoder_pred = nn.Linear(
-            config.decoder_hidden_size, patch_size, bias=True #config.patch_size**2 * config.num_channels, bias=True
+            config.decoder_hidden_size,
+            patch_size,
+            bias=True,  # config.patch_size**2 * config.num_channels, bias=True
         )  # encoder to decoder
         self.gradient_checkpointing = False
         self.config = config
@@ -248,7 +279,9 @@ class ViTDecoder(nn.Module):
                     None,
                 )
             else:
-                layer_outputs = layer_module(hidden_states, head_mask=None, output_attentions=output_attentions)
+                layer_outputs = layer_module(
+                    hidden_states, head_mask=None, output_attentions=output_attentions
+                )
 
             hidden_states = layer_outputs[0]
 
@@ -267,7 +300,11 @@ class ViTDecoder(nn.Module):
         logits = logits[:, 1:, :]
 
         if not return_dict:
-            return tuple(v for v in [logits, all_hidden_states, all_self_attentions] if v is not None)
+            return tuple(
+                v
+                for v in [logits, all_hidden_states, all_self_attentions]
+                if v is not None
+            )
         return ViTMAEDecoderOutput(
             logits=logits,
             hidden_states=all_hidden_states,
@@ -280,10 +317,16 @@ class ViTDecoder(nn.Module):
 #         super().__init__(config)
 #         self.config = config
 
+
 class ViTModel(nn.Module):
-    def __init__(self, config: ViTConfig, add_pooling_layer: bool = True, use_mask_token: bool = False):
+    def __init__(
+        self,
+        config: ViTConfig,
+        add_pooling_layer: bool = True,
+        use_mask_token: bool = False,
+    ):
         super().__init__()
-        self.config = config 
+        self.config = config
         self.embeddings = ViTEmbeddings(config, use_mask_token=use_mask_token)
         self.encoder = ViTEncoder(config)
 
@@ -314,11 +357,19 @@ class ViTModel(nn.Module):
         interpolate_pos_encoding: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ):
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
         )
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        output_hidden_states = (
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
+        )
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         if pixel_values is None:
             raise ValueError("You have to specify pixel_values")
@@ -331,7 +382,9 @@ class ViTModel(nn.Module):
         # head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
 
         embedding_output = self.embeddings(
-            pixel_values, bool_masked_pos=bool_masked_pos, interpolate_pos_encoding=interpolate_pos_encoding
+            pixel_values,
+            bool_masked_pos=bool_masked_pos,
+            interpolate_pos_encoding=interpolate_pos_encoding,
         )
 
         encoder_outputs = self.encoder(
@@ -343,10 +396,16 @@ class ViTModel(nn.Module):
         )
         sequence_output = encoder_outputs[0]
         sequence_output = self.layernorm(sequence_output)
-        pooled_output = self.pooler(sequence_output) if self.pooler is not None else None
+        pooled_output = (
+            self.pooler(sequence_output) if self.pooler is not None else None
+        )
 
         if not return_dict:
-            head_outputs = (sequence_output, pooled_output) if pooled_output is not None else (sequence_output,)
+            head_outputs = (
+                (sequence_output, pooled_output)
+                if pooled_output is not None
+                else (sequence_output,)
+            )
             return head_outputs + encoder_outputs[1:]
 
         return BaseModelOutputWithPooling(
@@ -379,7 +438,9 @@ class ViTMLM(ViTPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[tuple, MaskedLMOutput]:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         outputs = self.vit(
             values,
@@ -392,16 +453,21 @@ class ViTMLM(ViTPreTrainedModel):
         )
 
         sequence_output = outputs[0]
-        sequence_output = sequence_output[:, 1:]   # batch_size, num_patches, hidden_size
-        
+        sequence_output = sequence_output[:, 1:]  # batch_size, num_patches, hidden_size
 
-        reconstructed = self.decoder(sequence_output)[0].view(values.shape[0], -1)[:, :values.shape[1]]
-        
-        reconstruction_loss = nn.functional.mse_loss(reconstructed, values, reduction='none')
+        reconstructed = self.decoder(sequence_output)[0].view(values.shape[0], -1)[
+            :, : values.shape[1]
+        ]
+
+        reconstruction_loss = nn.functional.mse_loss(
+            reconstructed, values, reduction="none"
+        )
         masked_loss = None
         if bool_masked_pos is not None:
-            mask = bool_masked_pos.repeat_interleave(self.patch_size)[:values.shape[1]]
-            masked_loss = (reconstruction_loss * mask).sum() / ((mask.sum() + 1e-5) * values.shape[0])
+            mask = bool_masked_pos.repeat_interleave(self.patch_size)[: values.shape[1]]
+            masked_loss = (reconstruction_loss * mask).sum() / (
+                (mask.sum() + 1e-5) * values.shape[0]
+            )
         else:
             masked_loss = reconstruction_loss.mean()
             # reconstruction_loss = nn.functional.mse_loss(reconstructed, values, reduction='none')
@@ -419,9 +485,8 @@ class ViTMLM(ViTPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-
     def _step(self, batch, batch_idx, mode):
-        if self.mask_ratio > 0 and mode=='train':
+        if self.mask_ratio > 0 and mode == "train":
             bool_masked_pos = torch.rand((1, self.config.num_patches)) < self.mask_ratio
             bool_masked_pos = bool_masked_pos.to(batch.device)
         else:
@@ -429,22 +494,20 @@ class ViTMLM(ViTPreTrainedModel):
         output = self(batch, bool_masked_pos=bool_masked_pos)
 
         log_dict = {
-            f'loss/{mode}': output.loss,
+            f"loss/{mode}": output.loss,
             # TODO: add back in pearson R calculation w/o regnet package
-            #f'corr/{mode}': pearsonr(batch, output.logits).nanmean()
+            # f'corr/{mode}': pearsonr(batch, output.logits).nanmean()
         }
 
-        if mode == 'predict':
-            return {'latent': output.cls_token, 'log_dict': log_dict} #, output.logits
+        if mode == "predict":
+            return {"latent": output.cls_token, "log_dict": log_dict}  # , output.logits
 
         self.log_dict(log_dict, prog_bar=True, on_step=False, on_epoch=True)
-
-
 
         return output.loss
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     config = MAEConfig(feature_size=1000)
     model = ViTMLM(config)
 
