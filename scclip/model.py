@@ -9,8 +9,8 @@ from .lightning import LitModule
 
 
 def contrastive_loss(logits: torch.Tensor) -> torch.Tensor:
-    return nn.functional.cross_entropy(logits, 
-torch.arange(len(logits), device=logits.device)
+    return nn.functional.cross_entropy(
+        logits, torch.arange(len(logits), device=logits.device)
     )
 
 
