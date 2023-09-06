@@ -9,9 +9,6 @@ from transformers.utils import ModelOutput
 from dataclasses import dataclass
 from einops import rearrange
 
-from regnet.utils import pearsonr
-
-
 @dataclass
 class MaskedLMOutput(ModelOutput):
     loss: Optional[torch.FloatTensor] = None
@@ -433,7 +430,8 @@ class ViTMLM(ViTPreTrainedModel):
 
         log_dict = {
             f'loss/{mode}': output.loss,
-            f'corr/{mode}': pearsonr(batch, output.logits).nanmean()
+            # TODO: add back in pearson R calculation w/o regnet package
+            #f'corr/{mode}': pearsonr(batch, output.logits).nanmean()
         }
 
         if mode == 'predict':
