@@ -10,8 +10,6 @@ import pandas as pd
 from typing import Union, List
 from sklearn.preprocessing import maxabs_scale, LabelEncoder
 
-# from scdata.tools import GenomicInterval, get_promoter_interval, df_to_bed
-
 class BaseDataset(Dataset):
     def __init__(
         self,
@@ -81,10 +79,8 @@ class BaseDataset(Dataset):
         
         if 'atac' in self.mdata.mod.keys():
             self.mdata.mod['atac'].var_names_make_unique()
-            self._annotate_peak()
         if 'rna' in self.mdata.mod.keys():
             self.mdata.mod['rna'].var_names_make_unique()
-            self._annotate_gene()
 
         # print('Backed mode: {}'.format(self.mdata.isbacked))
 
@@ -164,10 +160,6 @@ class BaseDataset(Dataset):
         x = x / x.sum() * 1e4
         x = np.log1p(x)
         return x
-    
-    def _annotate_gene(self) -> None:
-        from scdata.tools import annotate_gene
-        self.mdata.mod['rna'] = annotate_gene(self.mdata.mod['rna'])
 
 
     def reindex_genes(self, adata, genes):
@@ -208,7 +200,8 @@ class BaseDataset(Dataset):
             sc.pp.highly_variable_genes(atac, n_top_genes=self.n_top_peaks, batch_key='batch', inplace=False, subset=True)
         elif self.n_top_peaks is not None:
             if len(self.n_top_peaks) != len(atac.var_names):
-                atac = self.reindex_peak(atac, self.n_top_peaks)
+                raise ValueError('n_top_peaks must be None or a list of length {}'.format(len(atac.var_names)))
+                # atac = self.reindex_peak(atac, self.n_top_peaks)
         elif self.linked:
             print('Linking {} peaks to {} genes'.format(atac.shape[1], self.mdata.mod['rna'].shape[1]), flush=True)
             gene_peak_links = self._get_gene_peak_links(dist=self.linked)
@@ -222,14 +215,6 @@ class BaseDataset(Dataset):
     def _transform_atac(self, x):
         x[x>1]=1
         return x
-    
-    def _annotate_peak(self) -> None:
-        from scdata.tools import annotate_peak
-        annotate_peak(self.mdata.mod['atac'])
-
-    def reindex_peak(self, adata, peaks, dist=0):
-        from scdata.tools import reindex_peak
-        return reindex_peak(adata, peaks, dist=dist)
     
 
     ## Multiome specific functions
@@ -251,25 +236,6 @@ class BaseDataset(Dataset):
             'atac': self._transform_atac(batch['atac']), 
             'rna': self._transform_rna(batch['rna'])
         }
-
-
-    ## Links
-    def _get_gene_peak_links(self, dist=0):
-        from scdata.tools import intersect_bed, strand_specific_start_site
-        tss = strand_specific_start_site(self.mdata.mod['rna'].var)
-        peaks = self.mdata.mod['atac'].var
-        return intersect_bed(tss, peaks, dist=dist)
-    
-    def _get_peak_gene_links(self, dist=0):
-        from scdata.tools import intersect_bed, strand_specific_start_site
-        tss = strand_specific_start_site(self.mdata.mod['rna'].var)
-        peaks = self.mdata.mod['atac'].var
-        return intersect_bed(peaks, tss, dist=dist)
-    
-    def _get_peak_peak_links(self, dist=0):
-        from scdata.tools import intersect_bed
-        peaks = self.mdata.mod['atac'].var
-        return intersect_bed(peaks, peaks, dist=dist)
 
         
 

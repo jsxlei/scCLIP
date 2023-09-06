@@ -9,7 +9,7 @@ from transformers.utils import ModelOutput
 from dataclasses import dataclass
 from einops import rearrange
 
-from regnet.utils import pearsonr
+# from regnet.utils import pearsonr
 
 
 @dataclass

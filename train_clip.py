@@ -187,7 +187,7 @@ if __name__ == '__main__':
 
         if args.mod == 'multiome':
             if args.data_dir == model.config.data_dir:
-                dataloader = dm.val_dataloader()
+                dataloader = dm.dataloader() #val_dataloader()
             else:
                 dataloader = dm.dataloader()
         if args.rna:
