@@ -11,4 +11,3 @@ leidenalg>=0.8.3
 einops>=0.6
 colorcet>=3.0.1
 transformers
-regnet
