@@ -2,8 +2,13 @@ numpy>=1.22.1
 pandas>=1.4.0
 scipy>=1.7.3
 torch>=1.10.0
-pytorch_lightning>=1.9
+# TODO: remove max version once add_argparse_args is removed
+pytorch-lightning<2.0
+lightning<2.0
 scanpy>=1.8.2
 muon>=0.1.2
 leidenalg>=0.8.3
+einops>=0.6
+colorcet>=3.0.1
 transformers
+pre-commit>=3.4.0

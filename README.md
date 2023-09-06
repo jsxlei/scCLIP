@@ -10,10 +10,18 @@ Download [multiome](https://www.dropbox.com/sh/70caiyjydx3jnq1/AAB51h6PCX9IGgi8j
   - Fetal
     - train: fetal
     - test: 
+
+## Install
+```
+pip install .
+pre-commit install --hook-type pre-push
+```
+
 ## Run 
 ```
 python train_clip.py --data_dir AD --logit_scale 1
 ```
+
 ## Load Pretrain model
 The model should saved under `path`/lightning_logs/checkpoints/epochxx-stepxx.ckpt
 ```
