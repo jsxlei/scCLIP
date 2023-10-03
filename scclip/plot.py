@@ -1,12 +1,4 @@
 #!/usr/bin/env python
-"""
-# Author: Lei Xiong
-# Contact: jsxlei@gmail.com
-# File Name: plot.py
-# Created Time : Fri 21 Jan 2022 04:12:32 AM CST
-# Description:
-
-"""
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches

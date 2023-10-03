@@ -1,12 +1,4 @@
 #!/usr/bin/env python
-"""
-# Author: Lei Xiong
-# Contact: jsxlei@gmail.com
-# File Name: callback.py
-# Created Time: Thu 19 Aug 2021 09:06:16 PM CST
-# Description:
-
-"""
 
 from lightning.pytorch.callbacks import Callback
 import torch

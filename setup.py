@@ -1,12 +1,5 @@
 #!/usr/bin/env python
-"""
-# Author: Lei Xiong
-# Created Time : Sun 17 Nov 2021 03:37:47 PM CST
 
-# File Name: setup.py
-# Description:
-
-"""
 from setuptools import setup, find_packages
 
 with open("requirements.txt") as f:
@@ -18,9 +11,6 @@ setup(
     packages=find_packages(),
     description="",
     test_suite="tests",
-    author="Lei Xiong",
-    author_email="jsxlei@gmail.com",
-    url="https://github.com/jsxlei/scclip",
     scripts=[],
     install_requires=requirements,
     python_requires=">3.6.0",

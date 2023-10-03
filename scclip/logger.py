@@ -1,12 +1,4 @@
 #!/usr/bin/env python
-"""
-# Author: Lei Xiong
-# Contact: jsxlei@gmail.com
-# File Name: RegNet/regnet/utils/logger.py
-# Created Time : Thu 28 Apr 2022 08:27:59 PM EDT
-# Description:
-
-"""
 
 import logging
 

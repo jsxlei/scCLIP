@@ -1,12 +1,4 @@
 #!/usr/bin/env python
-"""
-# Author: Lei Xiong
-# Contact: jsxlei@gmail.com
-# File Name: RegulationNetwork.py
-# Created Time : Tue 25 Jan 2022 07:20:34 PM EST
-# Description:
-
-"""
 
 from lightning.pytorch import Trainer, seed_everything
 from lightning.pytorch.loggers import TensorBoardLogger
