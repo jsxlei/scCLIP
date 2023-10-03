@@ -2,7 +2,7 @@
 ![](scCLIP.jpg)
 
 ## Download data 
-Download multiome data folder under data/  
+Download [multiome]() data folder under data/  
 - dataset:
   - Brain
     - train: AD
