@@ -1,8 +1,8 @@
-# Multi-modal Single-cell Integration using Transformers with Contrastive Learning
+# scCLIP: Multi-modal Single-cell Contrastive Learning Integration Pre-training
 ![](scCLIP.jpg)
 
 ## Download data 
-Download [multiome](https://www.dropbox.com/sh/70caiyjydx3jnq1/AAB51h6PCX9IGgi8jyT5KMhaa?dl=0) data folder under data/  
+Download [multiome]() data folder under data/  
 - dataset:
   - Brain
     - train: AD
